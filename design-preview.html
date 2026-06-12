@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek Usage - Design Preview</title>
+<style>
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root {
+    --panel-width: 340px;
+    --radius: 14px;
+    --header-height: 48px;
+    --item-height: 44px;
+  }
+
+  .panel-light {
+    --panel-bg: rgba(255, 255, 255, 0.78);
+    --panel-border: rgba(0, 0, 0, 0.08);
+    --panel-shadow: 0 22px 48px rgba(0, 0, 0, 0.18), 0 8px 16px rgba(0, 0, 0, 0.08);
+    --text-primary: #1d1d1f;
+    --text-secondary: #86868b;
+    --text-tertiary: #aeaeb2;
+    --accent: #0071e3;
+    --accent-hover: #0077ed;
+    --separator: rgba(0, 0, 0, 0.06);
+    --highlight-bg: rgba(0, 0, 0, 0.035);
+    --positive: #30d158;
+    --warning: #ff9f0a;
+    --chart-gradient-1: #536DFE;
+    --chart-gradient-2: #7C4DFF;
+  }
+
+  .panel-dark {
+    --panel-bg: rgba(44, 44, 48, 0.88);
+    --panel-border: rgba(255, 255, 255, 0.07);
+    --panel-shadow: 0 22px 48px rgba(0, 0, 0, 0.55), 0 10px 20px rgba(0, 0, 0, 0.3);
+    --text-primary: #f5f5f7;
+    --text-secondary: #98989d;
+    --text-tertiary: #636366;
+    --accent: #64abff;
+    --accent-hover: #77b6ff;
+    --separator: rgba(255, 255, 255, 0.07);
+    --highlight-bg: rgba(255, 255, 255, 0.05);
+    --positive: #30d158;
+    --warning: #ff9f0a;
+    --chart-gradient-1: #7C4DFF;
+    --chart-gradient-2: #E040FB;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+
+  .preview-container {
+    display: flex;
+    gap: 60px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .preview-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .preview-label {
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  /* === MacOS Popover Panel === */
+  .menu-bar-panel {
+    width: var(--panel-width);
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.4);
+    -webkit-backdrop-filter: blur(40px) saturate(1.4);
+    border-radius: var(--radius);
+    border: 0.5px solid var(--panel-border);
+    box-shadow: var(--panel-shadow);
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* === Header === */
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 8px;
+    min-height: var(--header-height);
+  }
+
+  .panel-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .app-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .app-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.1px;
+  }
+
+  .panel-header-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: all 0.12s ease;
+  }
+
+  .icon-btn:hover {
+    background: var(--highlight-bg);
+    color: var(--text-primary);
+  }
+
+  .icon-btn:active {
+    transform: scale(0.92);
+  }
+
+  .icon-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* === Section === */
+  .panel-section {
+    padding: 0 16px;
+  }
+
+  .panel-section + .panel-section {
+    margin-top: 0;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0 6px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .section-action {
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.12s ease;
+  }
+
+  .section-action:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+  }
+
+  /* === Info Row (Balance) === */
+  .info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    min-height: var(--item-height);
+    border-top: 0.5px solid var(--separator);
+  }
+
+  .info-row:first-of-type {
+    border-top: none;
+  }
+
+  .info-row-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 450;
+  }
+
+  .info-row-label .indicator-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .indicator-dot.online {
+    background: var(--positive);
+    box-shadow: 0 0 6px rgba(48, 209, 88, 0.35);
+  }
+
+  .info-row-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.1px;
+  }
+
+  /* === Bar Chart Section === */
+  .chart-section {
+    padding: 0 16px;
+    border-top: 0.5px solid var(--separator);
+  }
+
+  .section-total {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .bar-chart-container {
+    position: relative;
+    padding: 12px 0 0;
+    margin-bottom: 2px;
+  }
+
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 80px;
+  }
+
+  .bar-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .bar {
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+    min-height: 1px;
+    transition: height 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                opacity 0.2s ease;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .bar-wrapper:hover .bar {
+    opacity: 0.75;
+    filter: brightness(1.2);
+  }
+
+  .bar-wrapper:hover .bar-tooltip {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .bar.today {
+    position: relative;
+  }
+
+  .bar.today::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .bar-tooltip {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 7px;
+    border-radius: 5px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.15s ease;
+    font-variant-numeric: tabular-nums;
+    backdrop-filter: blur(8px);
+  }
+
+  .bar-tooltip .tooltip-date {
+    font-weight: 400;
+    opacity: 0.7;
+    margin-right: 4px;
+  }
+
+  .bar-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 3px solid transparent;
+    border-top-color: rgba(0, 0, 0, 0.8);
+  }
+
+  /* Chart axis */
+  .chart-axis {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0 6px;
+    border-top: 0.5px solid var(--separator);
+  }
+
+  .chart-axis span {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+
+  /* Chart stats row */
+  .chart-stats {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0 10px;
+    gap: 8px;
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    flex: 1;
+    padding: 4px 0;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+  }
+
+  .stat-item:hover {
+    background: var(--highlight-bg);
+  }
+
+  .stat-label {
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    letter-spacing: 0.2px;
+    text-transform: uppercase;
+  }
+
+  .stat-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* === Separator === */
+  .panel-separator {
+    height: 0.5px;
+    background: var(--separator);
+    margin: 0;
+  }
+
+  /* === Footer === */
+  .panel-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 12px;
+    border-top: 0.5px solid var(--separator);
+  }
+
+  .refresh-timestamp {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  .status-badge {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--positive);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .status-badge .live-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--positive);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* === Tooltip Arrow === */
+  .panel-arrow {
+    width: 16px;
+    height: 8px;
+    position: relative;
+    margin: 0 auto -1px;
+    z-index: 1;
+  }
+
+  .panel-arrow::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 8px;
+    background: var(--panel-bg);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    backdrop-filter: blur(40px) saturate(1.4);
+  }
+
+  /* === Loading Skeleton === */
+  .skeleton {
+    background: linear-gradient(90deg,
+      var(--separator) 25%,
+      var(--highlight-bg) 50%,
+      var(--separator) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: 4px;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .skeleton-line {
+    height: 13px;
+    width: 60%;
+    margin: 8px 0;
+  }
+
+  .skeleton-line.short {
+    width: 35%;
+  }
+
+  /* === Settings Panel === */
+  .settings-overlay {
+    padding: 16px;
+    border-top: 0.5px solid var(--separator);
+  }
+
+  .settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .settings-field label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .settings-input-group {
+    display: flex;
+    gap: 8px;
+  }
+
+  .settings-input {
+    flex: 1;
+    background: var(--highlight-bg);
+    border: 0.5px solid var(--separator);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-primary);
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .settings-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+  }
+
+  .settings-input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+  }
+
+  .btn-primary:active {
+    transform: scale(0.97);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* === Quit Button === */
+  .panel-quit {
+    width: 100%;
+    padding: 8px 16px 10px;
+  }
+
+  .quit-btn {
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 6px 0;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.12s ease;
+  }
+
+  .quit-btn:hover {
+    background: var(--highlight-bg);
+    color: var(--text-secondary);
+  }
+
+  /* === Hover interactions === */
+  .info-row:hover {
+    background: var(--highlight-bg);
+    border-radius: 6px;
+    margin: 0 -8px;
+    padding: 9px 8px;
+  }
+
+  .info-row:first-of-type:hover {
+    border-top: none;
+  }
+
+  /* === Staggered bar animation === */
+  .bar-wrapper {
+    animation: barRise 0.6s ease backwards;
+  }
+
+  @keyframes barRise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-container">
+  <!-- Light Mode -->
+  <div class="preview-item">
+    <span class="preview-label">浅色模式</span>
+    <div class="menu-bar-panel panel-light">
+      <div class="panel-arrow"></div>
+
+      <!-- Header -->
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="app-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="url(#g1)"/>
+              <path d="M8 14c0-2.21 1.79-4 4-4s4 1.79 4 4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M12 10V7" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="12" cy="16.5" r="1" fill="white"/>
+              <defs>
+                <linearGradient id="g1" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#4FC3F7"/>
+                  <stop offset="0.5" stop-color="#536DFE"/>
+                  <stop offset="1" stop-color="#7C4DFF"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <span class="panel-title">DeepSeek Usage</span>
+        </div>
+        <div class="panel-header-right">
+          <button class="icon-btn" title="Refresh">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.4s ease">
+              <path d="M2 8a6 6 0 0 1 11.47-2.97"/>
+              <path d="M14 3v2.5H11.5"/>
+              <path d="M14 8a6 6 0 0 1-11.47 2.97"/>
+              <path d="M2 13v-2.5h2.5"/>
+            </svg>
+          </button>
+          <button class="icon-btn" title="Settings" onclick="toggleSettings(this)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="2"/>
+              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-separator"></div>
+
+      <!-- Balance Section -->
+      <div class="panel-section">
+        <div class="section-header">
+          <span class="section-label">Account</span>
+        </div>
+        <div class="info-row">
+          <div class="info-row-label">
+            <span class="indicator-dot online"></span>
+            <span>Account Balance</span>
+          </div>
+          <span class="info-row-value">¥123.45</span>
+        </div>
+        <div class="info-row">
+          <div class="info-row-label">
+            <span>Today's Usage</span>
+          </div>
+          <span class="info-row-value">¥3.28</span>
+        </div>
+      </div>
+
+      <!-- Chart Section -->
+      <div class="chart-section">
+        <div class="section-header">
+          <span class="section-label">Last 30 Days</span>
+          <span class="section-total" id="totalLight">—</span>
+        </div>
+        <div class="bar-chart-container">
+          <div class="bar-chart" id="chartLight"></div>
+        </div>
+        <div class="chart-axis">
+          <span>Week 1</span>
+          <span>Week 2</span>
+          <span>Week 3</span>
+          <span>Week 4</span>
+        </div>
+        <div class="chart-stats">
+          <div class="stat-item">
+            <span class="stat-label">Daily Avg</span>
+            <span class="stat-value" id="avgLight">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Peak</span>
+            <span class="stat-value" id="peakLight">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Active Days</span>
+            <span class="stat-value" id="activeLight">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-separator"></div>
+
+      <!-- Settings -->
+      <div class="settings-overlay" id="settingsSection" style="display:none">
+        <div class="settings-field">
+          <label>DeepSeek API Key</label>
+          <div class="settings-input-group">
+            <input class="settings-input" type="password" placeholder="sk-xxxxxxxxxxxxxxxx" value="sk-demo-key-123456">
+            <button class="btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="panel-footer">
+        <span class="refresh-timestamp">Updated 2 min ago</span>
+        <span class="status-badge">
+          <span class="live-dot"></span>
+          Auto-refresh
+        </span>
+      </div>
+
+      <div class="panel-quit">
+        <button class="quit-btn">Quit DeepSeek Usage</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dark Mode -->
+  <div class="preview-item">
+    <span class="preview-label">深色模式</span>
+    <div class="menu-bar-panel panel-dark">
+      <div class="panel-arrow"></div>
+
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="app-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="url(#g2)"/>
+              <path d="M8 14c0-2.21 1.79-4 4-4s4 1.79 4 4" stroke="#1d1d1f" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M12 10V7" stroke="#1d1d1f" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="12" cy="16.5" r="1" fill="#1d1d1f"/>
+              <defs>
+                <linearGradient id="g2" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#4DD0E1"/>
+                  <stop offset="0.5" stop-color="#7C4DFF"/>
+                  <stop offset="1" stop-color="#E040FB"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <span class="panel-title">DeepSeek Usage</span>
+        </div>
+        <div class="panel-header-right">
+          <button class="icon-btn" title="Refresh">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 8a6 6 0 0 1 11.47-2.97"/>
+              <path d="M14 3v2.5H11.5"/>
+              <path d="M14 8a6 6 0 0 1-11.47 2.97"/>
+              <path d="M2 13v-2.5h2.5"/>
+            </svg>
+          </button>
+          <button class="icon-btn" title="Settings">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="2"/>
+              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-separator"></div>
+
+      <div class="panel-section">
+        <div class="section-header">
+          <span class="section-label">Account</span>
+        </div>
+        <div class="info-row">
+          <div class="info-row-label">
+            <span class="indicator-dot online"></span>
+            <span>Account Balance</span>
+          </div>
+          <span class="info-row-value">¥123.45</span>
+        </div>
+        <div class="info-row">
+          <div class="info-row-label">
+            <span>Today's Usage</span>
+          </div>
+          <span class="info-row-value">¥3.28</span>
+        </div>
+      </div>
+
+      <div class="chart-section">
+        <div class="section-header">
+          <span class="section-label">Last 30 Days</span>
+          <span class="section-total" id="totalDark">—</span>
+        </div>
+        <div class="bar-chart-container">
+          <div class="bar-chart" id="chartDark"></div>
+        </div>
+        <div class="chart-axis">
+          <span>Week 1</span>
+          <span>Week 2</span>
+          <span>Week 3</span>
+          <span>Week 4</span>
+        </div>
+        <div class="chart-stats">
+          <div class="stat-item">
+            <span class="stat-label">Daily Avg</span>
+            <span class="stat-value" id="avgDark">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Peak</span>
+            <span class="stat-value" id="peakDark">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Active Days</span>
+            <span class="stat-value" id="activeDark">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-separator"></div>
+
+      <div class="panel-footer">
+        <span class="refresh-timestamp">Updated 2 min ago</span>
+        <span class="status-badge">
+          <span class="live-dot"></span>
+          Auto-refresh
+        </span>
+      </div>
+
+      <div class="panel-quit">
+        <button class="quit-btn">Quit DeepSeek Usage</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="preview-item">
+    <span class="preview-label">加载状态</span>
+    <div class="menu-bar-panel panel-light">
+      <div class="panel-arrow"></div>
+
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="app-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="url(#g3)"/>
+              <path d="M8 14c0-2.21 1.79-4 4-4s4 1.79 4 4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M12 10V7" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="12" cy="16.5" r="1" fill="white"/>
+              <defs>
+                <linearGradient id="g3" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#4FC3F7"/>
+                  <stop offset="0.5" stop-color="#536DFE"/>
+                  <stop offset="1" stop-color="#7C4DFF"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <span class="panel-title">DeepSeek Usage</span>
+        </div>
+        <div class="panel-header-right">
+          <button class="icon-btn" title="Settings">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="2"/>
+              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-separator"></div>
+
+      <div class="panel-section" style="padding: 12px 16px">
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line" style="width:45%"></div>
+      </div>
+
+      <div class="panel-separator"></div>
+
+      <!-- Chart skeleton -->
+      <div class="panel-section" style="padding: 12px 16px 16px">
+        <div class="skeleton" style="height:10px;width:30%;margin-bottom:12px"></div>
+        <div style="display:flex;align-items:flex-end;gap:3px;height:80px">
+          <div class="skeleton" style="flex:1;height:40%"></div>
+          <div class="skeleton" style="flex:1;height:55%"></div>
+          <div class="skeleton" style="flex:1;height:30%"></div>
+          <div class="skeleton" style="flex:1;height:65%"></div>
+          <div class="skeleton" style="flex:1;height:20%"></div>
+          <div class="skeleton" style="flex:1;height:70%"></div>
+          <div class="skeleton" style="flex:1;height:45%"></div>
+          <div class="skeleton" style="flex:1;height:50%"></div>
+          <div class="skeleton" style="flex:1;height:35%"></div>
+          <div class="skeleton" style="flex:1;height:60%"></div>
+          <div class="skeleton" style="flex:1;height:25%"></div>
+          <div class="skeleton" style="flex:1;height:75%"></div>
+          <div class="skeleton" style="flex:1;height:40%"></div>
+          <div class="skeleton" style="flex:1;height:55%"></div>
+          <div class="skeleton" style="flex:1;height:30%"></div>
+        </div>
+        <div class="skeleton" style="height:8px;width:60%;margin:8px auto 0"></div>
+        <div style="display:flex;justify-content:space-between;margin-top:10px">
+          <div class="skeleton" style="height:20px;width:25%"></div>
+          <div class="skeleton" style="height:20px;width:25%"></div>
+          <div class="skeleton" style="height:20px;width:25%"></div>
+        </div>
+      </div>
+
+      <div class="panel-separator"></div>
+
+      <div class="panel-footer">
+        <span class="refresh-timestamp">Loading...</span>
+        <div class="skeleton" style="height:10px;width:80px;border-radius:2px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleSettings(btn) {
+  var section = document.getElementById('settingsSection');
+  if (!section) return;
+  var isHidden = section.style.display === 'none';
+  section.style.display = isHidden ? 'block' : 'none';
+}
+
+function generateData() {
+  var today = new Date();
+  var data = [];
+  var total = 0;
+  var peak = 0;
+  var activeDays = 0;
+
+  for (var i = 29; i >= 0; i--) {
+    var d = new Date(today);
+    d.setDate(d.getDate() - i);
+
+    var isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    var base = isWeekend ? 1.5 : 4.0;
+    var random = Math.random() * 3 - 1.2;
+    var val = Math.max(0, +(base + random + (Math.random() > 0.85 ? 4 : 0)).toFixed(2));
+
+    var dayStr = (d.getMonth() + 1) + '/' + d.getDate();
+    data.push({
+      date: dayStr,
+      value: val,
+      isToday: i === 0,
+      isWeekend: isWeekend,
+      rawDate: d
+    });
+    total += val;
+    if (val > peak) peak = val;
+    if (val > 0.01) activeDays++;
+  }
+  return { data: data, total: +total.toFixed(2), peak: peak, activeDays: activeDays };
+}
+
+function renderChart(containerId, totalId, avgId, peakId, activeId) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  var result = generateData();
+  var chartData = result.data;
+  var total = result.total;
+
+  var maxVal = Math.max.apply(null, chartData.map(function(d) { return d.value; }));
+  maxVal = Math.max(maxVal, 0.01);
+
+  var bars = '';
+  for (var i = 0; i < chartData.length; i++) {
+    var d = chartData[i];
+    var heightPct = (d.value / maxVal) * 100;
+    var isTodayClass = d.isToday ? ' today' : '';
+    var animDelay = (i * 10) + 'ms';
+
+    bars += '<div class="bar-wrapper" style="animation-delay:' + animDelay + '">' +
+              '<div class="bar-tooltip">' +
+                '<span class="tooltip-date">' + d.date + '</span>¥' + d.value.toFixed(2) +
+              '</div>' +
+              '<div class="bar' + isTodayClass + '" style="height:' + heightPct + '%;' +
+                'background:linear-gradient(to top, var(--chart-gradient-1), var(--chart-gradient-2));' +
+                (d.value < 0.01 ? 'opacity:0.08;' : '') +
+              '"></div>' +
+            '</div>';
+  }
+
+  container.innerHTML = bars;
+
+  // Update stats
+  var avg = +(total / 30).toFixed(2);
+  if (totalId) document.getElementById(totalId).textContent = '¥' + total.toFixed(2) + ' total';
+  if (avgId) document.getElementById(avgId).textContent = '¥' + avg;
+  if (peakId) document.getElementById(peakId).textContent = '¥' + result.peak.toFixed(2);
+  if (activeId) document.getElementById(activeId).textContent = result.activeDays + '/30';
+}
+
+renderChart('chartLight', 'totalLight', 'avgLight', 'peakLight', 'activeLight');
+renderChart('chartDark', 'totalDark', 'avgDark', 'peakDark', 'activeDark');
+</script>
+</body>
+</html>

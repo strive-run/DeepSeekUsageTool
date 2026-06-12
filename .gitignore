@@ -1,0 +1,20 @@
+# Swift Package Manager
+.build/
+.Package.resolved
+
+# Build outputs
+dist/
+out/
+
+# Xcode
+*.xcuserdata
+*.xcuserstate
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+.swiftpm/xcode/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
