@@ -1,9 +1,77 @@
+import AppKit
 import SwiftUI
 
 private enum AppTheme {
-    static let panelBackground = Color(red: 0xEE / 255, green: 0xF1 / 255, blue: 0xF1 / 255)
-    static let primaryText = Color(red: 0x47 / 255, green: 0x49 / 255, blue: 0x49 / 255)
-    static let titleText = Color(red: 0x22 / 255, green: 0x23 / 255, blue: 0x23 / 255)
+    static let panelBackground = adaptiveColor(
+        light: RGB(0xEE, 0xF1, 0xF1),
+        dark: RGB(0x25, 0x29, 0x29)
+    )
+    static let primaryText = adaptiveColor(
+        light: RGB(0x47, 0x49, 0x49),
+        dark: RGB(0xD8, 0xDD, 0xDD)
+    )
+    static let titleText = adaptiveColor(
+        light: RGB(0x22, 0x23, 0x23),
+        dark: RGB(0xF3, 0xF6, 0xF6)
+    )
+    static let separator = adaptiveColor(
+        light: RGB(0xC8, 0xCE, 0xCE),
+        dark: RGB(0x3E, 0x46, 0x46)
+    )
+    static let statCardBackground = adaptiveColor(
+        light: RGB(0x47, 0x49, 0x49, alpha: 0.045),
+        dark: RGB(0xFF, 0xFF, 0xFF, alpha: 0.07)
+    )
+    static let warning = Color.orange
+    static let chartEmpty = adaptiveColor(
+        light: RGB(0x0A, 0x84, 0xFF),
+        dark: RGB(0x4A, 0xA8, 0xFF)
+    )
+    static let chartFlash = adaptiveColor(
+        light: RGB(0x0A, 0x84, 0xFF),
+        dark: RGB(0x4A, 0xA8, 0xFF)
+    )
+    static let chartPro = adaptiveColor(
+        light: RGB(0x10, 0xB8, 0xD8),
+        dark: RGB(0x46, 0xD6, 0xEA)
+    )
+    static let chartChatReasoner = adaptiveColor(
+        light: RGB(0x5A, 0xC8, 0xFA),
+        dark: RGB(0x86, 0xDD, 0xFF)
+    )
+    static let chartFallbacks: [Color] = [
+        adaptiveColor(light: RGB(0x00, 0x7A, 0xCC), dark: RGB(0x48, 0xB5, 0xF0)),
+        adaptiveColor(light: RGB(0x32, 0xAD, 0xD8), dark: RGB(0x5E, 0xD2, 0xF1)),
+        adaptiveColor(light: RGB(0x46, 0xA0, 0xF5), dark: RGB(0x80, 0xBA, 0xFF)),
+        adaptiveColor(light: RGB(0x64, 0xD2, 0xFF), dark: RGB(0x9A, 0xE6, 0xFF))
+    ]
+
+    private struct RGB {
+        var red: CGFloat
+        var green: CGFloat
+        var blue: CGFloat
+        var alpha: CGFloat
+
+        init(_ red: Int, _ green: Int, _ blue: Int, alpha: CGFloat = 1) {
+            self.red = CGFloat(red) / 255
+            self.green = CGFloat(green) / 255
+            self.blue = CGFloat(blue) / 255
+            self.alpha = alpha
+        }
+    }
+
+    private static func adaptiveColor(light: RGB, dark: RGB) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let matchedAppearance = appearance.bestMatch(from: [.darkAqua, .aqua])
+            let color = matchedAppearance == .darkAqua ? dark : light
+            return NSColor(
+                calibratedRed: color.red,
+                green: color.green,
+                blue: color.blue,
+                alpha: color.alpha
+            )
+        })
+    }
 }
 
 struct PopoverContentView: View {
@@ -15,7 +83,7 @@ struct PopoverContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().opacity(0.45)
+            Separator()
             content
         }
         .frame(width: panelWidth)
@@ -103,14 +171,14 @@ struct PopoverContentView: View {
         }
         .padding(.horizontal, 16)
         .overlay(alignment: .top) {
-            Divider().opacity(0.45)
+            Separator()
         }
     }
 
     private func errorSection(_ text: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppTheme.warning)
             Text(text)
                 .font(.system(size: 12))
                 .foregroundStyle(AppTheme.primaryText)
@@ -125,7 +193,7 @@ struct PopoverContentView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 7)
         .overlay(alignment: .top) {
-            Divider().opacity(0.45)
+            Separator()
         }
     }
 
@@ -234,6 +302,14 @@ private struct ChartAxisLabel: Identifiable {
     var alignment: Alignment
 
     var id: Int { index }
+}
+
+private struct Separator: View {
+    var body: some View {
+        Rectangle()
+            .fill(AppTheme.separator)
+            .frame(height: 1)
+    }
 }
 
 struct AppGlyph: View {
@@ -372,18 +448,18 @@ private struct StackedBar: View {
 }
 
 private enum BarPalette {
-    static let empty = Color.blue
+    static let empty = AppTheme.chartEmpty
 
     static func color(for model: String) -> Color {
         switch model {
         case "deepseek-v4-flash":
-            Color(red: 0x0A / 255, green: 0x84 / 255, blue: 0xFF / 255)
+            AppTheme.chartFlash
         case "deepseek-v4-pro":
-            Color(red: 0x10 / 255, green: 0xB8 / 255, blue: 0xD8 / 255)
+            AppTheme.chartPro
         case "deepseek-chat & deepseek-reasoner":
-            Color(red: 0x5A / 255, green: 0xC8 / 255, blue: 0xFA / 255)
+            AppTheme.chartChatReasoner
         default:
-            fallbackColors[stableColorIndex(for: model)]
+            AppTheme.chartFallbacks[stableColorIndex(for: model)]
         }
     }
 
@@ -391,15 +467,8 @@ private enum BarPalette {
         let value = model.unicodeScalars.reduce(0) { partial, scalar in
             partial &+ Int(scalar.value)
         }
-        return abs(value) % fallbackColors.count
+        return abs(value) % AppTheme.chartFallbacks.count
     }
-
-    private static let fallbackColors: [Color] = [
-        Color(red: 0x00 / 255, green: 0x7A / 255, blue: 0xCC / 255),
-        Color(red: 0x32 / 255, green: 0xAD / 255, blue: 0xD8 / 255),
-        Color(red: 0x46 / 255, green: 0xA0 / 255, blue: 0xF5 / 255),
-        Color(red: 0x64 / 255, green: 0xD2 / 255, blue: 0xFF / 255)
-    ]
 }
 
 struct StatItem: View {
@@ -419,7 +488,7 @@ struct StatItem: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 3)
-        .background(AppTheme.primaryText.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(AppTheme.statCardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
