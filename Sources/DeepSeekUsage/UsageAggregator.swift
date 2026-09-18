@@ -16,18 +16,21 @@ enum UsageAggregator {
         return formatter
     }()
 
-    static func walletSummary(from payload: UserSummaryPayload) -> WalletSummary {
+    static func walletSummary(
+        from payload: UserSummaryPayload,
+        monthlyCostCNY: Decimal? = nil
+    ) -> WalletSummary {
         let normal = payload.normalWallets.first { $0.currency == "CNY" } ?? payload.normalWallets.first
         let bonus = payload.bonusWallets.first { $0.currency == "CNY" } ?? payload.bonusWallets.first
-        let monthlyCost = payload.monthlyCosts.first { $0.currency == "CNY" } ?? payload.monthlyCosts.first
+        let totalCost = payload.totalCosts.first { $0.currency == "CNY" } ?? payload.totalCosts.first
 
         return WalletSummary(
             balanceCNY: .fromDeepSeekString(normal?.balance),
             bonusCNY: .fromDeepSeekString(bonus?.balance),
-            monthlyCostCNY: .fromDeepSeekString(monthlyCost?.amount),
+            monthlyCostCNY: monthlyCostCNY ?? .fromDeepSeekString(totalCost?.amount),
             monthlyTokenUsage: .fromDeepSeekString(payload.monthlyTokenUsage),
-            totalAvailableTokenEstimation: .fromDeepSeekString(payload.totalAvailableTokenEstimation),
-            currentToken: payload.currentToken
+            totalAvailableTokenEstimation: .fromDeepSeekString(payload.totalAvailableTokenEstimation ?? normal?.tokenEstimation),
+            currentToken: payload.currentToken ?? 0
         )
     }
 
@@ -87,6 +90,68 @@ enum UsageAggregator {
         }
     }
 
+    static func dailyPoints(
+        byApiKeyCostPayload costPayload: UsageByApiKeyCostPayload,
+        byApiKeyAmountPayload amountPayload: UsageByApiKeyAmountPayload,
+        today: Date = Date(),
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> [DailyUsagePoint] {
+        let todayStart = calendar.startOfDay(for: today)
+        guard let monthStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: todayStart)
+        ) else {
+            return []
+        }
+
+        var modelsByDate: [Date: [String: ModelAccumulator]] = [:]
+
+        for currencySeries in costPayload.data where currencySeries.currency == "CNY" {
+            for series in currencySeries.series {
+                let modelName = normalizedModelName(series.model)
+                for bucket in series.buckets {
+                    guard let date = dayStart(from: bucket.time, calendar: calendar),
+                          date >= monthStart, date <= todayStart else {
+                        continue
+                    }
+                    modelsByDate[date, default: [:]][modelName, default: ModelAccumulator()].costCNY += .fromDeepSeekString(bucket.cost)
+                }
+            }
+        }
+
+        for series in amountPayload.series {
+            let modelName = normalizedModelName(series.model)
+            for bucket in series.buckets {
+                guard let date = dayStart(from: bucket.time, calendar: calendar),
+                      date >= monthStart, date <= todayStart else {
+                    continue
+                }
+                var accumulator = modelsByDate[date]?[modelName] ?? ModelAccumulator()
+                for (key, value) in bucket.usage ?? [:] {
+                    switch key {
+                    case "PROMPT_TOKEN", "PROMPT_CACHE_HIT_TOKEN", "PROMPT_CACHE_MISS_TOKEN", "RESPONSE_TOKEN":
+                        accumulator.tokenCount += value
+                    case "REQUEST":
+                        accumulator.requestCount += value
+                    default:
+                        break
+                    }
+                }
+                modelsByDate[date, default: [:]][modelName] = accumulator
+            }
+        }
+
+        return monthDates(from: monthStart, through: todayStart, calendar: calendar).map { date in
+            let models = sortedModelBreakdowns(from: modelsByDate[date] ?? [:])
+            return DailyUsagePoint(
+                date: date,
+                costCNY: models.reduce(Decimal.zero) { $0 + $1.costCNY },
+                tokenCount: models.reduce(Int64.zero) { $0 + $1.tokenCount },
+                requestCount: models.reduce(Int64.zero) { $0 + $1.requestCount },
+                models: models
+            )
+        }
+    }
+
     static func normalizedModelName(_ model: String) -> String {
         switch model {
         case "deepseek-chat", "deepseek-reasoner":
@@ -127,6 +192,10 @@ enum UsageAggregator {
         default:
             10
         }
+    }
+
+    private static func dayStart(from epochSeconds: Int64, calendar: Calendar) -> Date? {
+        calendar.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(epochSeconds)))
     }
 
     private static func monthDates(from start: Date, through end: Date, calendar: Calendar) -> [Date] {

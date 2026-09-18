@@ -1,12 +1,18 @@
 import Foundation
 import WebKit
 
+private func debugLog(_ message: String) {
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+}
+
 @MainActor
 final class DeepSeekWebSession {
     let webView: WKWebView
 
     private let scriptBridge = DeepSeekScriptBridge()
     private var hasLoadedUsagePage = false
+    private var authorizationToken: String?
+    private static let deviceID = UUID().uuidString
 
     init() {
         let configuration = WKWebViewConfiguration()
@@ -29,43 +35,70 @@ final class DeepSeekWebSession {
     }
 
     func fetchSnapshot(now: Date = Date()) async throws -> UsageSnapshot {
+        debugLog("[debug] fetchSnapshot begin")
         try await waitForPlatformContext()
         await allowAuthorizationCaptureToSettle()
+
+        guard let token = await readAuthorizationToken(), !token.isEmpty else {
+            throw DeepSeekError.businessError(code: -1, message: "未获取到 DeepSeek 登录令牌，请重新登录。")
+        }
+        authorizationToken = token
+        debugLog("token ready, prefix=\(token.prefix(12)) len=\(token.count)")
 
         let summaryEnvelope: APIEnvelope<UserSummaryPayload> = try await fetchEnvelope(
             path: "/api/v0/users/get_user_summary"
         )
 
-        let components = Calendar(identifier: .gregorian).dateComponents([.year, .month], from: now)
-        guard let year = components.year, let month = components.month else {
+        let calendar = Calendar(identifier: .gregorian)
+        let todayStart = calendar.startOfDay(for: now)
+        guard let monthStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: todayStart)
+        ) else {
             throw DeepSeekError.invalidURL
         }
+        let endDate = calendar.date(byAdding: .day, value: 1, to: todayStart) ?? now
+        let start = Int64(monthStart.timeIntervalSince1970)
+        let end = Int64(endDate.timeIntervalSince1970)
+        let tz = Int64(TimeZone.current.secondsFromGMT())
 
-        let amountEnvelope: APIEnvelope<UsageAmountPayload> = try await fetchEnvelope(
-            path: "/api/v0/usage/amount",
+        let amountEnvelope: APIEnvelope<UsageByApiKeyAmountPayload> = try await fetchEnvelope(
+            path: "/api/v0/usage/by_api_key/amount",
             queryItems: [
-                URLQueryItem(name: "month", value: String(month)),
-                URLQueryItem(name: "year", value: String(year))
+                URLQueryItem(name: "start", value: String(start)),
+                URLQueryItem(name: "end", value: String(end)),
+                URLQueryItem(name: "tz", value: String(tz))
             ]
         )
 
-        let costEnvelope: APIEnvelope<[UsageCostPayload]> = try await fetchEnvelope(
-            path: "/api/v0/usage/cost",
+        let costEnvelope: APIEnvelope<UsageByApiKeyCostPayload> = try await fetchEnvelope(
+            path: "/api/v0/usage/by_api_key/cost",
             queryItems: [
-                URLQueryItem(name: "month", value: String(month)),
-                URLQueryItem(name: "year", value: String(year))
+                URLQueryItem(name: "start", value: String(start)),
+                URLQueryItem(name: "end", value: String(end)),
+                URLQueryItem(name: "tz", value: String(tz))
             ]
         )
 
-        let costPayload = costEnvelope.data.bizData.first ?? UsageCostPayload(currency: "CNY", total: [], days: [])
-        let wallet = UsageAggregator.walletSummary(from: summaryEnvelope.data.bizData)
         let daily = UsageAggregator.dailyPoints(
-            costPayload: costPayload,
-            amountPayload: amountEnvelope.data.bizData,
+            byApiKeyCostPayload: costEnvelope.data.bizData,
+            byApiKeyAmountPayload: amountEnvelope.data.bizData,
             today: now
         )
 
+        let monthlyCostCNY = daily.reduce(Decimal.zero) { $0 + $1.costCNY }
+        let wallet = UsageAggregator.walletSummary(
+            from: summaryEnvelope.data.bizData,
+            monthlyCostCNY: monthlyCostCNY
+        )
+
         return UsageSnapshot(summary: wallet, dailyPoints: daily, lastUpdated: Date())
+    }
+
+    private func readAuthorizationToken() async -> String? {
+        let value = ((try? await webView.evaluateJavaScript(
+            "window.__deepSeekUsageReadToken ? window.__deepSeekUsageReadToken() : ''"
+        )) as? String ?? "")
+        return value.isEmpty ? nil : value
     }
 
     private func fetchEnvelope<Payload: Decodable & Sendable>(
@@ -73,52 +106,85 @@ final class DeepSeekWebSession {
         queryItems: [URLQueryItem] = []
     ) async throws -> APIEnvelope<Payload> {
         var components = URLComponents()
+        components.scheme = "https"
+        components.host = "platform.deepseek.com"
         components.path = path
         components.queryItems = queryItems.isEmpty ? nil : queryItems
-        guard let relativeURL = components.string else { throw DeepSeekError.invalidURL }
+        guard let url = components.url else { throw DeepSeekError.invalidURL }
 
-        let requestId = UUID().uuidString
-        let responseTask = Task { try await scriptBridge.waitForResponse(requestId: requestId) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 20
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        if let token = authorizationToken {
+            request.setValue(
+                token.hasPrefix("Bearer ") ? token : "Bearer \(token)",
+                forHTTPHeaderField: "Authorization"
+            )
+        }
+        request.setValue("web", forHTTPHeaderField: "x-client-platform")
+        request.setValue("1.0.0", forHTTPHeaderField: "x-client-version")
+        request.setValue("com.deepseek.chat", forHTTPHeaderField: "x-client-bundle-id")
+        request.setValue("zh-CN", forHTTPHeaderField: "x-client-locale")
+        request.setValue("\(TimeZone.current.secondsFromGMT())", forHTTPHeaderField: "x-client-timezone-offset")
+        request.setValue("https://platform.deepseek.com/usage", forHTTPHeaderField: "Referer")
+        request.setValue(Self.deviceID, forHTTPHeaderField: "x-device-id")
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36",
+            forHTTPHeaderField: "User-Agent"
+        )
+
+        let data: Data
+        let response: URLResponse
         do {
-            try await webView.evaluateJavaScript(Self.fetchScript(requestId: requestId, relativeURL: relativeURL))
+            (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            scriptBridge.cancel(requestId: requestId)
-            responseTask.cancel()
+            debugLog("[debug] fetch \(path) error: \(error)")
+            if let urlError = error as? URLError, urlError.code == .timedOut {
+                throw DeepSeekError.businessError(code: -1, message: "DeepSeek 请求超时。")
+            }
             throw error
         }
-        let response = try await responseTask.value
-        print("DeepSeek fetch \(path) status=\(response.status) ok=\(response.ok) bytes=\(response.body.count)")
+        guard let http = response as? HTTPURLResponse else {
+            throw DeepSeekError.httpStatus(0)
+        }
+        debugLog("DeepSeek fetch \(path) status=\(http.statusCode) bytes=\(data.count)")
 
-        guard (200..<300).contains(response.status) else {
-            if response.status == 401 || response.status == 403 {
+        guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 || http.statusCode == 403 {
                 throw DeepSeekError.unauthorized
             }
-            throw DeepSeekError.httpStatus(response.status)
+            throw DeepSeekError.httpStatus(http.statusCode)
         }
 
-        let bodyData = Data(response.body.utf8)
-        try DeepSeekResponseValidator.validateBusinessEnvelope(bodyData)
-        return try JSONDecoder().decode(APIEnvelope<Payload>.self, from: bodyData)
+        try DeepSeekResponseValidator.validateBusinessEnvelope(data)
+        return try JSONDecoder().decode(APIEnvelope<Payload>.self, from: data)
     }
 
     private func waitForPlatformContext() async throws {
         loadUsagePageIfNeeded()
-        for _ in 0..<80 {
+        debugLog("[debug] waitForPlatformContext url=\(webView.url?.absoluteString ?? "nil") isReady=\(isReady) isLoading=\(webView.isLoading)")
+        for _ in 0..<40 {
             if isReady, !webView.isLoading {
+                debugLog("[debug] platform context ready")
                 return
             }
             try await Task.sleep(nanoseconds: 250_000_000)
         }
+        debugLog("[debug] platform context timeout url=\(webView.url?.absoluteString ?? "nil") isLoading=\(webView.isLoading)")
         throw DeepSeekError.businessError(code: -1, message: "正在等待 DeepSeek 登录会话同步。")
     }
 
     private func allowAuthorizationCaptureToSettle() async {
-        for _ in 0..<4 {
-            if !((try? await webView.evaluateJavaScript("window.__deepSeekUsageAuthToken || ''")) as? String ?? "").isEmpty {
+        for _ in 0..<40 {
+            let token = ((try? await webView.evaluateJavaScript("window.__deepSeekUsageReadToken ? window.__deepSeekUsageReadToken() : ''")) as? String ?? "")
+            if !token.isEmpty {
+                debugLog("[debug] token captured, prefix=\(token.prefix(12)) len=\(token.count)")
                 return
             }
             try? await Task.sleep(nanoseconds: 250_000_000)
         }
+        debugLog("[debug] token capture timed out, url=\(webView.url?.absoluteString ?? "nil")")
     }
 
     static func fetchScript(requestId: String, relativeURL: String) -> String {
@@ -132,8 +198,14 @@ final class DeepSeekWebSession {
               window.webkit.messageHandlers.deepSeekUsage.postMessage(Object.assign({ requestId }, payload));
             } catch (_) {}
           };
-          const token = window.__deepSeekUsageAuthToken || "";
-          const headers = { "Accept": "*/*", "X-App-Version": "1.0.0" };
+          const token = (window.__deepSeekUsageReadToken && window.__deepSeekUsageReadToken()) || "";
+          const headers = {
+            "Accept": "application/json",
+            "X-App-Version": "1.0.0",
+            "x-client-platform": "web",
+            "x-client-version": "1.0.0",
+            "Referer": "https://platform.deepseek.com/usage"
+          };
           if (token) headers["Authorization"] = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
           fetch(\(encodedURL), {
             method: "GET",
@@ -196,6 +268,27 @@ final class DeepSeekWebSession {
               if (String(name).toLowerCase() === "authorization") remember(value);
             } catch (_) {}
             return originalSetRequestHeader.apply(this, arguments);
+          };
+          const readStoredToken = () => {
+            try {
+              const raw = localStorage.getItem("userToken");
+              if (!raw) return "";
+              let t = raw;
+              try {
+                const p = JSON.parse(raw);
+                if (typeof p === "string") t = p;
+                else if (p && typeof p === "object") t = p.value || p.token || p.access_token || p.accessToken || p.userToken || "";
+              } catch (_) {}
+              t = String(t).trim().replace(/^["']|["']$/g, "");
+              return (t.length >= 20 && !/\\s/.test(t)) ? t : "";
+            } catch (_) {
+              return "";
+            }
+          };
+          window.__deepSeekUsageReadToken = () => {
+            const captured = window.__deepSeekUsageAuthToken || "";
+            if (/^Bearer\\s+/i.test(captured)) return captured.replace(/^Bearer\\s+/i, "").trim();
+            return readStoredToken();
           };
         })();
         """,

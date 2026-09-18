@@ -143,22 +143,20 @@ struct APIBusinessEnvelope<Payload: Decodable & Sendable>: Decodable, Sendable {
 }
 
 struct UserSummaryPayload: Decodable, Sendable {
-    var currentToken: Int64
-    var monthlyUsage: String
     var normalWallets: [WalletPayload]
     var bonusWallets: [WalletPayload]
-    var totalAvailableTokenEstimation: String
-    var monthlyCosts: [CostPayload]
-    var monthlyTokenUsage: String
+    var totalCosts: [CostPayload]
+    var currentToken: Int64?
+    var monthlyTokenUsage: String?
+    var totalAvailableTokenEstimation: String?
 
     enum CodingKeys: String, CodingKey {
-        case currentToken = "current_token"
-        case monthlyUsage = "monthly_usage"
         case normalWallets = "normal_wallets"
         case bonusWallets = "bonus_wallets"
-        case totalAvailableTokenEstimation = "total_available_token_estimation"
-        case monthlyCosts = "monthly_costs"
+        case totalCosts = "total_costs"
+        case currentToken = "current_token"
         case monthlyTokenUsage = "monthly_token_usage"
+        case totalAvailableTokenEstimation = "total_available_token_estimation"
     }
 }
 
@@ -203,6 +201,63 @@ struct ModelUsagePayload: Decodable, Sendable {
 struct UsageValuePayload: Decodable, Sendable {
     var type: String
     var amount: String
+}
+
+// MARK: - by_api_key 用量接口（当前 DeepSeek 平台前端首选）
+
+struct UsageByApiKeyAmountPayload: Decodable, Sendable {
+    var start: Int64
+    var end: Int64
+    var bucket: Int64
+    var models: [String]
+    var series: [UsageByApiKeySeriesPayload]
+}
+
+struct UsageByApiKeyCostPayload: Decodable, Sendable {
+    var start: Int64
+    var end: Int64
+    var bucket: Int64
+    var models: [String]
+    var data: [UsageCostCurrencySeriesPayload]
+}
+
+struct UsageCostCurrencySeriesPayload: Decodable, Sendable {
+    var currency: String
+    var series: [UsageByApiKeySeriesPayload]
+}
+
+struct UsageByApiKeySeriesPayload: Decodable, Sendable {
+    var apiKey: ApiKeyInfoPayload
+    var model: String
+    var buckets: [UsageByApiKeyBucketPayload]
+
+    enum CodingKeys: String, CodingKey {
+        case apiKey = "api_key"
+        case model
+        case buckets
+    }
+}
+
+struct ApiKeyInfoPayload: Decodable, Sendable {
+    var trackingId: String
+    var name: String
+    var sensitiveId: String
+    var valid: Bool
+    var keyType: String
+
+    enum CodingKeys: String, CodingKey {
+        case trackingId = "tracking_id"
+        case name
+        case sensitiveId = "sensitive_id"
+        case valid
+        case keyType = "key_type"
+    }
+}
+
+struct UsageByApiKeyBucketPayload: Decodable, Sendable {
+    var time: Int64
+    var usage: [String: Int64]?
+    var cost: String?
 }
 
 enum DeepSeekError: LocalizedError, Equatable, Sendable {

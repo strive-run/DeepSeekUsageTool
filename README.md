@@ -14,7 +14,7 @@ macOS 菜单栏应用，实时查看 DeepSeek API 用量、费用和 Token 消�
 ## 系统要求
 
 - macOS 26.0（Sequoia）或更高版本
-- arm64（Apple Silicon，如 M1 / M2 / M3 / M4 系列芯片）
+- Apple Silicon（arm64）或者 Intel（x86_64）芯片均可
 
 ## 如何构建
 

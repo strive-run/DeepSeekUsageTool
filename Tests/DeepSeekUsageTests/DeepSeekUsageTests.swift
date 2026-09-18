@@ -1,34 +1,35 @@
-import XCTest
+import Foundation
+import Testing
 @testable import DeepSeekUsage
 
-final class DeepSeekUsageTests: XCTestCase {
-    func testUserSummaryDecoding() throws {
+struct DeepSeekUsageTests {
+    @Test func testUserSummaryDecoding() throws {
         let envelope = try JSONDecoder().decode(APIEnvelope<UserSummaryPayload>.self, from: Data(summaryJSON.utf8))
         let summary = UsageAggregator.walletSummary(from: envelope.data.bizData)
 
-        XCTAssertEqual(envelope.code, 0)
-        XCTAssertEqual(summary.balanceCNY, Decimal(string: "22.5404823200000000")!)
-        XCTAssertEqual(summary.monthlyCostCNY, Decimal(string: "16.1022661200000000")!)
-        XCTAssertEqual(summary.monthlyTokenUsage, 103_225_801)
-        XCTAssertEqual(summary.totalAvailableTokenEstimation, 7_513_494)
+        #expect(envelope.code == 0)
+        #expect(summary.balanceCNY == Decimal(string: "22.5404823200000000")!)
+        #expect(summary.monthlyCostCNY == Decimal(string: "16.1022661200000000")!)
+        #expect(summary.monthlyTokenUsage == 103_225_801)
+        #expect(summary.totalAvailableTokenEstimation == 7_513_494)
     }
 
-    func testAmountDecodingAggregatesTokensAndRequests() throws {
+    @Test func testAmountDecodingAggregatesTokensAndRequests() throws {
         let envelope = try JSONDecoder().decode(APIEnvelope<UsageAmountPayload>.self, from: Data(amountJSON.utf8))
-        let firstDay = try XCTUnwrap(envelope.data.bizData.days.first)
+        let firstDay = try #require(envelope.data.bizData.days.first)
 
         let tokens = firstDay.data.reduce(Int64.zero) { $0 + $1.tokenValue }
         let requests = firstDay.data.reduce(Int64.zero) { $0 + $1.requestValue }
 
-        XCTAssertEqual(envelope.data.bizData.days.count, 2)
-        XCTAssertEqual(tokens, 8_690_339)
-        XCTAssertEqual(requests, 106)
+        #expect(envelope.data.bizData.days.count == 2)
+        #expect(tokens == 8_690_339)
+        #expect(requests == 106)
     }
 
-    func testCostDecodingAndDailyAggregation() throws {
+    @Test func testCostDecodingAndDailyAggregation() throws {
         let costEnvelope = try JSONDecoder().decode(APIEnvelope<[UsageCostPayload]>.self, from: Data(costJSON.utf8))
         let amountEnvelope = try JSONDecoder().decode(APIEnvelope<UsageAmountPayload>.self, from: Data(amountJSON.utf8))
-        let costPayload = try XCTUnwrap(costEnvelope.data.bizData.first)
+        let costPayload = try #require(costEnvelope.data.bizData.first)
 
         let today = ISO8601DateFormatter().date(from: "2026-06-30T12:00:00Z")!
         let points = UsageAggregator.dailyPoints(
@@ -37,31 +38,31 @@ final class DeepSeekUsageTests: XCTestCase {
             today: today
         )
 
-        XCTAssertEqual(points.count, 30)
-        XCTAssertEqual(points[0].costCNY, Decimal(string: "1.55048056")!)
-        XCTAssertEqual(points[0].tokenCount, 8_690_339)
-        XCTAssertEqual(points[0].requestCount, 106)
-        XCTAssertEqual(points[0].models.count, 2)
-        XCTAssertEqual(points[0].models[0].model, "deepseek-v4-flash")
-        XCTAssertEqual(points[0].models[0].costCNY, Decimal(string: "0.44088136")!)
-        XCTAssertEqual(points[0].models[0].tokenCount, 3_349_061)
-        XCTAssertEqual(points[0].models[0].requestCount, 55)
-        XCTAssertEqual(points[0].models[1].model, "deepseek-v4-pro")
-        XCTAssertEqual(points[0].models[1].costCNY, Decimal(string: "1.10959920")!)
-        XCTAssertEqual(points[0].models[1].tokenCount, 5_341_278)
-        XCTAssertEqual(points[0].models[1].requestCount, 51)
-        XCTAssertEqual(points[0].models.reduce(Decimal.zero) { $0 + $1.costCNY }, points[0].costCNY)
-        XCTAssertEqual(points[0].models.reduce(Int64.zero) { $0 + $1.tokenCount }, points[0].tokenCount)
-        XCTAssertEqual(points[0].models.reduce(Int64.zero) { $0 + $1.requestCount }, points[0].requestCount)
-        XCTAssertEqual(points[1].costCNY, Decimal(string: "1.00693608")!)
-        XCTAssertEqual(points[2].costCNY, .zero)
-        XCTAssertEqual(points[2].tokenCount, 0)
-        XCTAssertEqual(points[2].models, [])
-        XCTAssertEqual(points[29].costCNY, .zero)
-        XCTAssertEqual(points[29].requestCount, 0)
+        #expect(points.count == 30)
+        #expect(points[0].costCNY == Decimal(string: "1.55048056")!)
+        #expect(points[0].tokenCount == 8_690_339)
+        #expect(points[0].requestCount == 106)
+        #expect(points[0].models.count == 2)
+        #expect(points[0].models[0].model == "deepseek-v4-flash")
+        #expect(points[0].models[0].costCNY == Decimal(string: "0.44088136")!)
+        #expect(points[0].models[0].tokenCount == 3_349_061)
+        #expect(points[0].models[0].requestCount == 55)
+        #expect(points[0].models[1].model == "deepseek-v4-pro")
+        #expect(points[0].models[1].costCNY == Decimal(string: "1.10959920")!)
+        #expect(points[0].models[1].tokenCount == 5_341_278)
+        #expect(points[0].models[1].requestCount == 51)
+        #expect(points[0].models.reduce(Decimal.zero) { $0 + $1.costCNY } == points[0].costCNY)
+        #expect(points[0].models.reduce(Int64.zero) { $0 + $1.tokenCount } == points[0].tokenCount)
+        #expect(points[0].models.reduce(Int64.zero) { $0 + $1.requestCount } == points[0].requestCount)
+        #expect(points[1].costCNY == Decimal(string: "1.00693608")!)
+        #expect(points[2].costCNY == .zero)
+        #expect(points[2].tokenCount == 0)
+        #expect(points[2].models == [])
+        #expect(points[29].costCNY == .zero)
+        #expect(points[29].requestCount == 0)
     }
 
-    func testZeroValueModelBreakdownsAreHiddenForSelectedMetric() {
+    @Test func testZeroValueModelBreakdownsAreHiddenForSelectedMetric() {
         let point = DailyUsagePoint(
             date: Date(),
             costCNY: Decimal(1),
@@ -83,16 +84,16 @@ final class DeepSeekUsageTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(UsageAggregator.normalizedModelName("deepseek-reasoner"), "deepseek-chat & deepseek-reasoner")
-        XCTAssertEqual(point.visibleModels(for: .cost).map(\.model), ["deepseek-v4-pro"])
-        XCTAssertEqual(point.visibleModels(for: .tokens).map(\.model), ["deepseek-v4-pro"])
-        XCTAssertEqual(point.visibleModels(for: .requests).map(\.model), ["deepseek-v4-pro"])
+        #expect(UsageAggregator.normalizedModelName("deepseek-reasoner") == "deepseek-chat & deepseek-reasoner")
+        #expect(point.visibleModels(for: .cost).map(\.model) == ["deepseek-v4-pro"])
+        #expect(point.visibleModels(for: .tokens).map(\.model) == ["deepseek-v4-pro"])
+        #expect(point.visibleModels(for: .requests).map(\.model) == ["deepseek-v4-pro"])
     }
 
-    func testMonthToDatePointsFillMissingDates() throws {
+    @Test func testMonthToDatePointsFillMissingDates() throws {
         let costEnvelope = try JSONDecoder().decode(APIEnvelope<[UsageCostPayload]>.self, from: Data(costJSON.utf8))
         let amountEnvelope = try JSONDecoder().decode(APIEnvelope<UsageAmountPayload>.self, from: Data(amountJSON.utf8))
-        let costPayload = try XCTUnwrap(costEnvelope.data.bizData.first)
+        let costPayload = try #require(costEnvelope.data.bizData.first)
 
         let today = ISO8601DateFormatter().date(from: "2026-06-11T12:00:00Z")!
         let points = UsageAggregator.dailyPoints(
@@ -102,18 +103,18 @@ final class DeepSeekUsageTests: XCTestCase {
         )
 
         let calendar = Calendar(identifier: .gregorian)
-        XCTAssertEqual(points.count, 11)
-        XCTAssertTrue(calendar.isDate(points[0].date, inSameDayAs: ISO8601DateFormatter().date(from: "2026-06-01T00:00:00Z")!))
-        XCTAssertTrue(calendar.isDate(points[10].date, inSameDayAs: ISO8601DateFormatter().date(from: "2026-06-11T00:00:00Z")!))
-        XCTAssertEqual(points[2].costCNY, .zero)
-        XCTAssertEqual(points[2].tokenCount, 0)
-        XCTAssertEqual(points[2].requestCount, 0)
+        #expect(points.count == 11)
+        #expect(calendar.isDate(points[0].date, inSameDayAs: ISO8601DateFormatter().date(from: "2026-06-01T00:00:00Z")!))
+        #expect(calendar.isDate(points[10].date, inSameDayAs: ISO8601DateFormatter().date(from: "2026-06-11T00:00:00Z")!))
+        #expect(points[2].costCNY == .zero)
+        #expect(points[2].tokenCount == 0)
+        #expect(points[2].requestCount == 0)
     }
 
-    func testSnapshotMonthlyMetricTotalsAndStats() throws {
+    @Test func testSnapshotMonthlyMetricTotalsAndStats() throws {
         let costEnvelope = try JSONDecoder().decode(APIEnvelope<[UsageCostPayload]>.self, from: Data(costJSON.utf8))
         let amountEnvelope = try JSONDecoder().decode(APIEnvelope<UsageAmountPayload>.self, from: Data(amountJSON.utf8))
-        let costPayload = try XCTUnwrap(costEnvelope.data.bizData.first)
+        let costPayload = try #require(costEnvelope.data.bizData.first)
         let summaryEnvelope = try JSONDecoder().decode(APIEnvelope<UserSummaryPayload>.self, from: Data(summaryJSON.utf8))
         let today = ISO8601DateFormatter().date(from: "2026-06-11T12:00:00Z")!
         let points = UsageAggregator.dailyPoints(
@@ -127,17 +128,17 @@ final class DeepSeekUsageTests: XCTestCase {
             lastUpdated: today
         )
 
-        XCTAssertEqual(snapshot.totalCostCNY, Decimal(string: "2.55741664")!)
-        XCTAssertEqual(snapshot.totalTokenCount, 24_590_291)
-        XCTAssertEqual(snapshot.totalRequestCount, 347)
-        XCTAssertEqual(snapshot.dailyAverageTokenCount, 2_235_481)
-        XCTAssertEqual(snapshot.dailyAverageRequestCount, 31)
-        XCTAssertEqual(snapshot.peakTokenCount, 15_899_952)
-        XCTAssertEqual(snapshot.peakRequestCount, 241)
-        XCTAssertEqual(snapshot.activeDays, 2)
+        #expect(snapshot.totalCostCNY == Decimal(string: "2.55741664")!)
+        #expect(snapshot.totalTokenCount == 24_590_291)
+        #expect(snapshot.totalRequestCount == 347)
+        #expect(snapshot.dailyAverageTokenCount == 2_235_481)
+        #expect(snapshot.dailyAverageRequestCount == 31)
+        #expect(snapshot.peakTokenCount == 15_899_952)
+        #expect(snapshot.peakRequestCount == 241)
+        #expect(snapshot.activeDays == 2)
     }
 
-    func testSnapshotTodayUsesLastUpdatedDate() throws {
+    @Test func testSnapshotTodayUsesLastUpdatedDate() throws {
         let calendar = Calendar(identifier: .gregorian)
         let juneTen = ISO8601DateFormatter().date(from: "2026-06-10T00:00:00Z")!
         let juneEleven = ISO8601DateFormatter().date(from: "2026-06-11T00:00:00Z")!
@@ -157,15 +158,15 @@ final class DeepSeekUsageTests: XCTestCase {
             lastUpdated: ISO8601DateFormatter().date(from: "2026-06-11T12:00:00Z")!
         )
 
-        let today = try XCTUnwrap(snapshot.today)
-        XCTAssertTrue(calendar.isDate(today.date, inSameDayAs: juneEleven))
-        XCTAssertEqual(today.costCNY, Decimal(2))
+        let today = try #require(snapshot.today)
+        #expect(calendar.isDate(today.date, inSameDayAs: juneEleven))
+        #expect(today.costCNY == Decimal(2))
     }
 
-    func testFutureDatesAreIgnored() throws {
+    @Test func testFutureDatesAreIgnored() throws {
         let costEnvelope = try JSONDecoder().decode(APIEnvelope<[UsageCostPayload]>.self, from: Data(costJSON.utf8))
         let amountEnvelope = try JSONDecoder().decode(APIEnvelope<UsageAmountPayload>.self, from: Data(amountJSON.utf8))
-        let costPayload = try XCTUnwrap(costEnvelope.data.bizData.first)
+        let costPayload = try #require(costEnvelope.data.bizData.first)
 
         let today = ISO8601DateFormatter().date(from: "2026-06-01T12:00:00Z")!
         let points = UsageAggregator.dailyPoints(
@@ -174,63 +175,68 @@ final class DeepSeekUsageTests: XCTestCase {
             today: today
         )
 
-        XCTAssertEqual(points.count, 1)
-        XCTAssertEqual(points[0].requestCount, 106)
+        #expect(points.count == 1)
+        #expect(points[0].requestCount == 106)
     }
 
-    func testNullDataBusinessErrorIsNotDecodedAsMissingData() throws {
+    @Test func testNullDataBusinessErrorIsNotDecodedAsMissingData() throws {
         let data = Data(#"{"code":40002,"msg":"Missing Token","data":null}"#.utf8)
 
-        XCTAssertThrowsError(try DeepSeekResponseValidator.validateBusinessEnvelope(data)) { error in
-            XCTAssertEqual(error as? DeepSeekError, .businessError(code: 40002, message: "Missing Token"))
+        do {
+            _ = try DeepSeekResponseValidator.validateBusinessEnvelope(data)
+            Issue.record("Expected .businessError to be thrown")
+        } catch let error as DeepSeekError {
+            #expect(error == .businessError(code: 40002, message: "Missing Token"))
+        } catch {
+            Issue.record("Unexpected error: \(error)")
         }
     }
 
     @MainActor
-    func testBridgeResponseDecodingSuccess() throws {
-        let decoded = try XCTUnwrap(
+    @Test func testBridgeResponseDecodingSuccess() throws {
+        let decoded = try #require(
             DeepSeekScriptBridge.decodeResponse(
                 from: ["requestId": "abc", "status": 200, "ok": true, "body": #"{"code":0}"#]
             )
         )
 
-        XCTAssertEqual(decoded.requestId, "abc")
-        XCTAssertEqual(decoded.response, WebFetchResponse(status: 200, ok: true, body: #"{"code":0}"#, error: nil))
+        #expect(decoded.requestId == "abc")
+        #expect(decoded.response == WebFetchResponse(status: 200, ok: true, body: #"{"code":0}"#, error: nil))
     }
 
     @MainActor
-    func testBridgeResponseDecodingError() throws {
-        let decoded = try XCTUnwrap(
+    @Test func testBridgeResponseDecodingError() throws {
+        let decoded = try #require(
             DeepSeekScriptBridge.decodeResponse(
                 from: ["requestId": "abc", "error": "network failed"]
             )
         )
 
-        XCTAssertEqual(decoded.requestId, "abc")
-        XCTAssertEqual(decoded.response.error, "network failed")
-        XCTAssertEqual(decoded.response.errorOrNil, .businessError(code: -1, message: "network failed"))
+        #expect(decoded.requestId == "abc")
+        #expect(decoded.response.error == "network failed")
+        #expect(decoded.response.errorOrNil == .businessError(code: -1, message: "network failed"))
     }
 
     @MainActor
-    func testBridgeResponseDecodingUnauthorizedStatus() throws {
-        let decoded = try XCTUnwrap(
+    @Test func testBridgeResponseDecodingUnauthorizedStatus() throws {
+        let decoded = try #require(
             DeepSeekScriptBridge.decodeResponse(
                 from: ["requestId": "abc", "status": 401, "ok": false, "body": ""]
             )
         )
 
-        XCTAssertEqual(decoded.response.status, 401)
-        XCTAssertFalse(decoded.response.ok)
+        #expect(decoded.response.status == 401)
+        #expect(decoded.response.ok == false)
     }
 
     @MainActor
-    func testFetchScriptStartsAsyncWorkWithoutReturningPromise() {
+    @Test func testFetchScriptStartsAsyncWorkWithoutReturningPromise() {
         let script = DeepSeekWebSession.fetchScript(requestId: "request-1", relativeURL: "/api/v0/users/get_user_summary")
 
-        XCTAssertFalse(script.contains("(async ()"))
-        XCTAssertTrue(script.contains("postMessage"))
-        XCTAssertTrue(script.contains("return undefined;"))
-        XCTAssertTrue(script.contains("request-1"))
+        #expect(script.contains("(async ()") == false)
+        #expect(script.contains("postMessage"))
+        #expect(script.contains("return undefined;"))
+        #expect(script.contains("request-1"))
     }
 }
 
