@@ -802,6 +802,8 @@ private struct StackedBar: View {
     var maxValue: Double
     var barHeight: CGFloat
 
+    @State private var isHovering = false
+
     var body: some View {
         let visibleModels = point.visibleModels(for: metric)
         let totalValue = point.value(for: metric)
@@ -822,11 +824,62 @@ private struct StackedBar: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
         .frame(height: totalValue > 0 ? max(2, barHeight * CGFloat(totalValue / maxValue)) : 2, alignment: .bottom)
+        .opacity(isHovering ? 0.8 : 1)
+        .overlay(alignment: .top) {
+            if isHovering {
+                BarChartTooltip(
+                    date: DateFormatter.shortMonthDay.string(from: point.date),
+                    value: tooltipValueText
+                )
+                .fixedSize()
+                .alignmentGuide(.top) { $0[.bottom] }
+                .offset(y: -4)
+                .allowsHitTesting(false)
+            }
+        }
+        // 扩展 hover 热区到整列（矮柱子也容易悬停）
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .zIndex(isHovering ? 1 : 0)
+    }
+
+    private var tooltipValueText: String {
+        switch metric {
+        case .cost:
+            CurrencyFormatter.cny(point.costCNY)
+        case .tokens:
+            NumberFormatter.decimal.string(from: NSNumber(value: point.tokenCount)) ?? "0"
+        case .requests:
+            NumberFormatter.decimal.string(from: NSNumber(value: point.requestCount)) ?? "0"
+        }
     }
 
     private func segmentHeight(for value: Double) -> CGFloat {
         guard point.value(for: metric) > 0 else { return 0 }
         return max(1, barHeight * CGFloat(value / maxValue))
+    }
+}
+
+private struct BarChartTooltip: View {
+    var date: String
+    var value: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(date)
+                .opacity(0.7)
+            Text(value)
+        }
+        .font(.system(size: 10, weight: .medium))
+        .monospacedDigit()
+        .foregroundStyle(.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Color.black.opacity(0.8))
+        )
     }
 }
 
